@@ -110,6 +110,28 @@ Both modes apply to the same set of recognized extensions (`jpg`/`jpeg`/`png`/
 `gif`/`webp`/`avif`/`svg`/`ico`/`pdf`/`mp4`/`webm`/`mov`/`mp3`/`doc(x)`/
 `xls(x)`/`zip`); anything else just 404s regardless of mode.
 
+## Updates
+
+This plugin isn't distributed through wp.org — it's internal, hosted at
+[affinitybridge/stage-file-proxy](https://github.com/affinitybridge/stage-file-proxy).
+Sites running it (installed via git, not a wp.org zip) check that GitHub
+repo for newer releases via the bundled
+[Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker)
+library, and will show a normal wp-admin "update available" notice on the
+Plugins page and Dashboard → Updates when one is published. No separate
+update-checker plugin or per-site configuration is needed.
+
+### Releasing updates
+
+To ship an update that maintainers will see:
+
+1. Bump the `Version:` header in `stage-file-proxy.php`.
+2. Commit, tag the commit with that version (matching the header exactly,
+   e.g. `1.1` — no `v` prefix), and push the tag.
+3. Publish a [GitHub Release](https://github.com/affinitybridge/stage-file-proxy/releases)
+   from that tag with release notes. The release notes become the
+   changelog shown in the "View version x.x details" popup in wp-admin.
+
 ## Developers
 
 Two standard WordPress filters let you hook into this plugin's behavior from

@@ -17,6 +17,19 @@
  */
 
 /**
+ * Checks GitHub Releases on the repo below for newer tagged versions, so
+ * that sites running this plugin see a normal wp-admin "update available"
+ * notice — see the README's "Releasing updates" section for how to cut one.
+ */
+require_once __DIR__ . '/vendor/plugin-update-checker/plugin-update-checker.php';
+
+YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+	'https://github.com/affinitybridge/stage-file-proxy/',
+	__FILE__,
+	'stage-file-proxy'
+);
+
+/**
  * Errors must be suppressed on static-looking paths, or they'll corrupt the
  * header/download response — so this plugin has to load first.
  *
