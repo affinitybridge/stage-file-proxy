@@ -2,7 +2,8 @@
 /*
 	Plugin Name: Stage File Proxy
 	Description: Fetches missing uploads from a configured source site on non-production environments. This plugin does nothing on prod but should remain enabled so that it won't need to be re-enabled when development sites sync the database. To use this plugin in development environments, see the README.md. Other settings under Settings -> Stage File Proxy (once it is configured).
-	Version: 1.0
+	Note: If you don't have an /uploads/ directory on your development site, it may take a few requests for the plugin to fully populate it.
+	Version: 1.1
 	Author: Affinity Bridge
 	Author URI: mailto:info@affinitybridge.com
 	License: GPL-2.0-or-later
@@ -166,7 +167,7 @@ function sfp_dispatch() {
 	if ( '' === $relative_path || false !== strpos( $relative_path, '..' ) ) {
 		return; // not an uploads-relative request, or a path-traversal attempt.
 	}
-	if ( ! preg_match( '#\.(jpe?g|png|gif|webp|avif|svg|ico|pdf|mp4|webm|mov|mp3|docx?|xlsx?|zip)$#i', $relative_path ) ) {
+	if ( ! preg_match( '#\.(jpe?g|png|gif|webp|avif|svg|ico|pdf|mp4|webm|mov|mp3|docx?|xlsx?|zip|css|js|json|woff2?|ttf|otf|eot)$#i', $relative_path ) ) {
 		return; // not a recognized upload type — let the normal 404 happen.
 	}
 
@@ -274,9 +275,22 @@ function sfp_resize_image( $basefile, $resize ) {
  * Serve the file directly.
  */
 function sfp_serve_requested_file( $filename ) {
-	// find the mime type
-	$finfo = finfo_open( FILEINFO_MIME_TYPE );
-	$type = finfo_file( $finfo, $filename );
+	// find the mime type. finfo sniffs text formats like CSS and JS as
+	// text/plain, which browsers reject under X-Content-Type-Options: nosniff,
+	// so map those by extension first.
+	$text_types = array(
+		'css'  => 'text/css',
+		'js'   => 'application/javascript',
+		'json' => 'application/json',
+		'svg'  => 'image/svg+xml',
+	);
+	$ext = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
+	if ( isset( $text_types[ $ext ] ) ) {
+		$type = $text_types[ $ext ];
+	} else {
+		$finfo = finfo_open( FILEINFO_MIME_TYPE );
+		$type = finfo_file( $finfo, $filename );
+	}
 	// serve the image this one time (next time the webserver will do it for us)
 	ob_end_clean();
 	header( 'Content-Type: '. $type );

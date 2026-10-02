@@ -108,7 +108,10 @@ wp option update sfp_mode do_not_cache
 
 Both modes apply to the same set of recognized extensions (`jpg`/`jpeg`/`png`/
 `gif`/`webp`/`avif`/`svg`/`ico`/`pdf`/`mp4`/`webm`/`mov`/`mp3`/`doc(x)`/
-`xls(x)`/`zip`); anything else just 404s regardless of mode.
+`xls(x)`/`zip`/`css`/`js`/`json`/`woff(2)`/`ttf`/`otf`/`eot` — the text and
+font types cover plugin-generated assets like Elementor's
+`uploads/elementor/css/post-*.css`); anything else just 404s regardless of
+mode.
 
 ## Updates
 
