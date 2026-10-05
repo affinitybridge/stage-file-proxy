@@ -10,7 +10,7 @@ activation state comes along with the DB sync; the plugin itself never runs
 unless configured).
 
 The source site is configured through a constant in code (see
-Configuration below); the fetch mode is configured through **Settings →
+Configuration below); the fetch mode is configured through **Tools →
 Stage File Proxy** in wp-admin (see Modes below).
 
 ## How it works
@@ -77,7 +77,7 @@ Notes on the value:
 
 The plugin has two mutually exclusive modes.
 
-Once the module is configured with the proxy URL, the mode can be set in wp-admin under **Settings → Stage File Proxy**, or with WP-CLI:
+Once the module is configured with the proxy URL, the mode can be set in wp-admin under **Tools → Stage File Proxy**, or with WP-CLI:
 
 ```bash
 wp option update sfp_mode fetch_and_cache

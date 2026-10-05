@@ -1,7 +1,7 @@
 <?php
 /*
 	Plugin Name: Stage File Proxy
-	Description: Fetches missing uploads from a configured source site on non-production environments. This plugin does nothing on prod but should remain enabled so that it won't need to be re-enabled when development sites sync the database. To use this plugin in development environments, see the README.md. Other settings under Settings -> Stage File Proxy (once it is configured).
+	Description: Fetches missing uploads from a configured source site on non-production environments. This plugin does nothing on prod but should remain enabled so that it won't need to be re-enabled when development sites sync the database. To use this plugin in development environments, see the README.md. Other settings under Tools -> Stage File Proxy (once it is configured).
 	Note: If you don't have an /uploads/ directory on your development site, it may take a few requests for the plugin to fully populate it.
 	Version: 1.1
 	Author: Affinity Bridge
@@ -56,14 +56,14 @@ if ( ! $sfp_url ) {
 }
 
 /**
- * Settings → Stage File Proxy: lets an admin pick the fetch mode (see
+ * Tools → Stage File Proxy: lets an admin pick the fetch mode (see
  * sfp_get_mode()) without touching WP-CLI. Only registered when
  * STAGE_FILE_PROXY_URL is configured (the early return above) — consistent
  * with the rest of this plugin doing nothing at all when it's not.
  */
 add_action( 'admin_menu', 'sfp_admin_menu' );
 function sfp_admin_menu() {
-	add_options_page(
+	add_management_page(
 		'Stage File Proxy',
 		'Stage File Proxy',
 		'manage_options',
@@ -93,6 +93,7 @@ function sfp_render_settings_page() {
 	?>
 	<div class="wrap">
 		<h1>Stage File Proxy</h1>
+		<?php settings_errors(); ?>
 		<form method="post" action="options.php">
 			<?php settings_fields( 'sfp_settings' ); ?>
 			<fieldset>
