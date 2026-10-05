@@ -3,7 +3,7 @@
 	Plugin Name: Stage File Proxy
 	Description: Fetches missing uploads from a configured source site on non-production environments. This plugin does nothing on prod but should remain enabled so that it won't need to be re-enabled when development sites sync the database. To use this plugin in development environments, see the README.md. Other settings under Tools -> Stage File Proxy (once it is configured).
 	Note: If you don't have an /uploads/ directory on your development site, it may take a few requests for the plugin to fully populate it.
-	Version: 1.1
+	Version: 1.1.1
 	Author: Affinity Bridge
 	Author URI: mailto:info@affinitybridge.com
 	Update URI: https://github.com/affinitybridge/stage-file-proxy/
