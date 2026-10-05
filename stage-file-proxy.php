@@ -6,6 +6,7 @@
 	Version: 1.1
 	Author: Affinity Bridge
 	Author URI: mailto:info@affinitybridge.com
+	Update URI: https://github.com/affinitybridge/stage-file-proxy/
 	License: GPL-2.0-or-later
 	License URI: https://www.gnu.org/licenses/gpl-2.0.html
 */
