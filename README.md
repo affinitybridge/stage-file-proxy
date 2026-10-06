@@ -27,7 +27,24 @@ but by default (fetch-and-cache):
 3. If the source doesn't have it either, and the requested filename encodes
    a thumbnail size (e.g. `photo-300x200.jpg`), fetches the original instead
    and resizes it locally.
-4. Otherwise, falls through to a normal 404.
+4. Otherwise, responds with a 404.
+
+Pages with many images fire many of these at once, so fetch-and-cache is
+built for concurrency:
+
+- **Retries.** A connection error, timeout, 429 or 5xx from the source (e.g.
+  its rate limiting kicking in) is retried up to 3 times with a short
+  backoff, honoring a `Retry-After` of up to 5s, and giving up after ~15s so
+  PHP doesn't hit `max_execution_time`.
+- **Honest errors.** If the source still fails, the response is a 503 with
+  `Retry-After` and no-cache headers, so a reload tries again; a file the
+  source doesn't have is a 404. Neither is ever a 200.
+- **One fetch per file.** Concurrent requests for the same file (e.g.
+  several thumbnails of one original) wait on a lock (in the system temp
+  dir) and reuse the first request's result instead of fetching it again.
+- **Atomic writes.** Fetched files and generated thumbnails are written to a
+  temp name and renamed into place, so neither the webserver nor a
+  concurrent resize ever reads a half-written file.
 
 Saving under the exact filename (rather than running it through WordPress's
 `sanitize_file_name()`/`wp_unique_filename()`) matters because production

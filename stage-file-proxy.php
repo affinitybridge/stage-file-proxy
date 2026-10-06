@@ -3,7 +3,7 @@
 	Plugin Name: Stage File Proxy
 	Description: Fetches missing uploads from a configured source site on non-production environments. This plugin does nothing on prod but should remain enabled so that it won't need to be re-enabled when development sites sync the database. To use this plugin in development environments, see the README.md. Other settings under Tools -> Stage File Proxy (once it is configured).
 	Note: If you don't have an /uploads/ directory on your development site, it may take a few requests for the plugin to fully populate it.
-	Version: 1.1.1
+	Version: 1.1.2
 	Author: Affinity Bridge
 	Author URI: mailto:info@affinitybridge.com
 	Update URI: https://github.com/affinitybridge/stage-file-proxy/
@@ -178,15 +178,20 @@ function sfp_dispatch() {
 		exit;
 	}
 
-	// fetch_and_cache (default): serve the exact file locally if we already have it.
+	// fetch_and_cache (default): serve the exact file locally if we already
+	// have it -- e.g. a concurrent request finished saving it after the
+	// webserver missed it for this one. Returning here instead would hand
+	// the request to WordPress's 404 page.
 	$dest = trailingslashit( wp_get_upload_dir()['basedir'] ) . $relative_path;
 	if ( file_exists( $dest ) ) {
-		return; // the webserver will serve it on the next hit.
-	}
-
-	if ( sfp_fetch_and_save( $relative_path, $dest ) ) {
 		sfp_serve_requested_file( $dest );
 	}
+
+	$result = sfp_fetch_and_save( $relative_path, $dest );
+	if ( true === $result ) {
+		sfp_serve_requested_file( $dest );
+	}
+	$transient = 'transient' === $result;
 
 	// The exact file isn't on the source. If the name encodes a thumbnail
 	// size, fetch the original and resize it rather than failing outright.
@@ -201,19 +206,36 @@ function sfp_dispatch() {
 
 		$original_dest = trailingslashit( wp_get_upload_dir()['basedir'] ) . $resize['filename'];
 		if ( ! file_exists( $original_dest ) ) {
-			sfp_fetch_and_save( $resize['filename'], $original_dest );
+			$transient = 'transient' === sfp_fetch_and_save( $resize['filename'], $original_dest );
 		}
 		sfp_resize_image( $original_dest, $resize ); // exits on success.
 	}
 
-	sfp_error();
+	// A transient origin failure (rate limit, overload, timeout) gets a
+	// non-cacheable 503 so a reload retries it; anything else is a real 404.
+	sfp_error( $transient ? 503 : 404 );
 }
 
 /**
  * Fetch $relative_path from the configured source site and write it to
- * $dest under its exact name. Returns whether the fetch succeeded.
+ * $dest under its exact name. Returns true on success, 'transient' if the
+ * origin failed in a way a later retry might not (rate limit, overload,
+ * timeout), or false if the origin doesn't have it.
+ *
+ * Pages with many images fire many of these at once, so: concurrent
+ * requests for the same file (e.g. several thumbnails of one original)
+ * wait on a lock and reuse the first one's result instead of fetching it
+ * again, and the file is written to a temp name and renamed into place so
+ * nothing -- the webserver or a concurrent resize -- ever reads it half
+ * written.
  */
 function sfp_fetch_and_save( $relative_path, $dest ) {
+	$lock = sfp_lock( $dest );
+	if ( file_exists( $dest ) ) {
+		sfp_unlock( $lock );
+		return true; // a concurrent request fetched it while we waited.
+	}
+
 	$remote = sfp_get_base_url() . sfp_encode_relative_path( $relative_path );
 
 	/**
@@ -235,7 +257,7 @@ function sfp_fetch_and_save( $relative_path, $dest ) {
 		'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
 	);
 	$args = apply_filters( 'sfp_http_remote_args', $default_args );
-	$resp = wp_remote_get( $remote, $args );
+	$resp = sfp_remote_get( $remote, $args );
 
 	// Other bot protection (e.g. Anubis) does the opposite: it lets plain
 	// clients through but answers browser-like UAs with a 200 HTML challenge
@@ -243,21 +265,85 @@ function sfp_fetch_and_save( $relative_path, $dest ) {
 	// we got such a page -- retry once with a non-browser UA.
 	if ( sfp_is_html_response( $resp ) ) {
 		$args['user-agent'] = 'stage-file-proxy (+https://github.com/affinitybridge/stage-file-proxy)';
-		$resp = wp_remote_get( $remote, $args );
+		$resp = sfp_remote_get( $remote, $args );
 	}
 
-	if ( is_wp_error( $resp ) || 200 !== (int) wp_remote_retrieve_response_code( $resp ) ) {
-		return false; // origin doesn't have it.
-	}
-	if ( sfp_is_html_response( $resp ) ) {
-		return false; // still a block/challenge page -- never cache it as the file.
+	$result = false; // origin doesn't have it.
+	if ( sfp_is_transient_failure( $resp ) ) {
+		$result = 'transient';
+	} elseif ( is_wp_error( $resp ) || 200 !== (int) wp_remote_retrieve_response_code( $resp ) ) {
+		$result = false;
+	} elseif ( sfp_is_html_response( $resp ) ) {
+		$result = 'transient'; // still a block/challenge page -- never cache it as the file.
+	} elseif ( wp_mkdir_p( dirname( $dest ) ) ) {
+		// exact name, no sanitize. The temp name sits in the same directory
+		// so rename() is atomic.
+		$tmp = dirname( $dest ) . '/.sfp-' . uniqid( '', true ) . '.tmp';
+		if ( false !== file_put_contents( $tmp, wp_remote_retrieve_body( $resp ) ) && rename( $tmp, $dest ) ) {
+			$result = true;
+		} else {
+			@unlink( $tmp );
+		}
 	}
 
-	if ( ! wp_mkdir_p( dirname( $dest ) ) ) {
-		return false;
+	sfp_unlock( $lock );
+	return $result;
+}
+
+/**
+ * wp_remote_get(), retried a couple of times on transient failures -- a
+ * page full of images can trip the origin's rate limiting or briefly
+ * overload it. Honors a short Retry-After, and gives up early rather than
+ * run into PHP's max_execution_time.
+ */
+function sfp_remote_get( $url, $args ) {
+	$start = microtime( true );
+	for ( $attempt = 1; ; $attempt++ ) {
+		$resp = wp_remote_get( $url, $args );
+		if ( $attempt >= 3 || ! sfp_is_transient_failure( $resp ) ) {
+			return $resp;
+		}
+		$wait = $attempt; // 1s, then 2s.
+		$retry_after = is_wp_error( $resp ) ? '' : wp_remote_retrieve_header( $resp, 'retry-after' );
+		if ( is_numeric( $retry_after ) ) {
+			$wait = min( max( (int) $retry_after, 1 ), 5 );
+		}
+		if ( microtime( true ) - $start + $wait > 15 ) {
+			return $resp;
+		}
+		sleep( $wait );
 	}
-	file_put_contents( $dest, wp_remote_retrieve_body( $resp ) ); // exact name, no sanitize.
-	return true;
+}
+
+/**
+ * Whether $resp is a failure that might succeed if tried again: a
+ * connection error/timeout, 429 Too Many Requests, or a 5xx.
+ */
+function sfp_is_transient_failure( $resp ) {
+	if ( is_wp_error( $resp ) ) {
+		return true;
+	}
+	$code = (int) wp_remote_retrieve_response_code( $resp );
+	return 429 === $code || $code >= 500;
+}
+
+/**
+ * Take an exclusive lock for writing $path, blocking until any concurrent
+ * request holding it is done. Lock files live in the temp dir, not uploads.
+ */
+function sfp_lock( $path ) {
+	$handle = @fopen( trailingslashit( get_temp_dir() ) . 'sfp-' . md5( $path ) . '.lock', 'c' );
+	if ( $handle ) {
+		flock( $handle, LOCK_EX );
+	}
+	return $handle; // false if the lock file couldn't be opened -- carry on unlocked.
+}
+
+function sfp_unlock( $handle ) {
+	if ( $handle ) {
+		flock( $handle, LOCK_UN );
+		fclose( $handle );
+	}
 }
 
 /**
@@ -287,17 +373,29 @@ function sfp_resize_image( $basefile, $resize ) {
 		if ( 'r' == $resize['mode'] ) {
 			$suffix = 'r-' . $suffix;
 		}
-		$img = wp_get_image_editor( $basefile );
-
-		// wp_get_image_editor can return a WP_Error if the file exists but is corrupted.
-		if ( is_wp_error( $img ) ) {
-			sfp_error();
-		}
-
-		$img->resize( $resize['width'], $resize['height'], $resize['crop'] );
 		$info = pathinfo( $basefile );
 		$path_to_new_file = $info['dirname'] . '/' . $info['filename'] . '-' . $suffix . '.' .$info['extension'];
-		$img->save( $path_to_new_file );
+
+		// Same lock-then-recheck and temp-then-rename as sfp_fetch_and_save().
+		$lock = sfp_lock( $path_to_new_file );
+		if ( ! file_exists( $path_to_new_file ) ) {
+			$img = wp_get_image_editor( $basefile );
+
+			// wp_get_image_editor can return a WP_Error if the file exists but is corrupted.
+			if ( is_wp_error( $img ) ) {
+				sfp_unlock( $lock );
+				sfp_error();
+			}
+
+			$img->resize( $resize['width'], $resize['height'], $resize['crop'] );
+			// Keep the extension on the temp name -- the editor picks the output format from it.
+			$saved = $img->save( $info['dirname'] . '/.sfp-' . uniqid( '', true ) . '.' . $info['extension'] );
+			if ( is_wp_error( $saved ) || ! rename( $saved['path'], $path_to_new_file ) ) {
+				sfp_unlock( $lock );
+				sfp_error();
+			}
+		}
+		sfp_unlock( $lock );
 		sfp_serve_requested_file( $path_to_new_file );
 	}
 }
@@ -432,6 +530,18 @@ function sfp_get_base_url() {
 	return $sfp_url;
 }
 
-function sfp_error() {
+/**
+ * Fail the request with a real error status (die() alone would send a 200)
+ * and no-cache headers, so the browser doesn't hold on to the failure.
+ */
+function sfp_error( $status = 404 ) {
+	if ( ob_get_level() ) {
+		ob_end_clean();
+	}
+	status_header( $status );
+	nocache_headers();
+	if ( 503 === $status ) {
+		header( 'Retry-After: 5' );
+	}
 	die( 'SFP tried to load, but encountered an error' );
 }
