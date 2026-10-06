@@ -13,7 +13,7 @@
 
 /**
  * This is a fork of alleyinteractive/stage-file-proxy (originally by Austin
- * Smith, Alley Interactive — http://alleyinteractive.com/), substantially
+ * Smith, Alley Interactive -- http://alleyinteractive.com/), substantially
  * modified by Affinity Bridge (info@affinitybridge.com). Licensed
  * GPL-2.0-or-later, same as the original.
  */
@@ -21,7 +21,7 @@
 /**
  * Checks GitHub Releases on the repo below for newer tagged versions, so
  * that sites running this plugin see a normal wp-admin "update available"
- * notice — see the README's "Releasing updates" section for how to cut one.
+ * notice -- see the README's "Releasing updates" section for how to cut one.
  */
 require_once __DIR__ . '/vendor/plugin-update-checker/plugin-update-checker.php';
 
@@ -33,7 +33,7 @@ YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
 
 /**
  * Errors must be suppressed on static-looking paths, or they'll corrupt the
- * header/download response — so this plugin has to load first.
+ * header/download response -- so this plugin has to load first.
  *
  * Assumption: if a request for /wp-content/uploads/ reaches PHP at all, it's
  * a 404, and the file should be fetched from the remote server instead.
@@ -57,9 +57,9 @@ if ( ! $sfp_url ) {
 }
 
 /**
- * Tools → Stage File Proxy: lets an admin pick the fetch mode (see
+ * Tools -> Stage File Proxy: lets an admin pick the fetch mode (see
  * sfp_get_mode()) without touching WP-CLI. Only registered when
- * STAGE_FILE_PROXY_URL is configured (the early return above) — consistent
+ * STAGE_FILE_PROXY_URL is configured (the early return above) -- consistent
  * with the rest of this plugin doing nothing at all when it's not.
  */
 add_action( 'admin_menu', 'sfp_admin_menu' );
@@ -147,16 +147,16 @@ function sfp_expect() {
 
 /**
  * Handle a missing upload request. Only engages for a recognized extension
- * (see the regex below) — anything else falls through to the normal 404.
+ * (see the regex below) -- anything else falls through to the normal 404.
  *
  * The configured mode (see sfp_get_mode()) decides what happens next:
- * - 'do_not_cache' — 302 redirect the browser straight to the file's URL on
+ * - 'do_not_cache' -- 302 redirect the browser straight to the file's URL on
  *   the source site. Nothing is ever saved locally.
- * - 'fetch_and_cache' (default) — fetch the exact file from the source site,
+ * - 'fetch_and_cache' (default) -- fetch the exact file from the source site,
  *   write it to disk under the exact requested filename (bypassing
  *   sanitize_file_name()/wp_unique_filename(), which would otherwise mangle
- *   "dirty" production filenames — e.g. U+202F, the narrow no-break space
- *   macOS puts in formatted times like "10.33.02 AM" — and cause an endless
+ *   "dirty" production filenames -- e.g. U+202F, the narrow no-break space
+ *   macOS puts in formatted times like "10.33.02 AM" -- and cause an endless
  *   404-and-refetch loop when the saved name no longer matches the URL
  *   referenced in the content), then serve it directly.
  *
@@ -170,7 +170,7 @@ function sfp_dispatch() {
 		return; // not an uploads-relative request, or a path-traversal attempt.
 	}
 	if ( ! preg_match( '#\.(jpe?g|png|gif|webp|avif|svg|ico|pdf|mp4|webm|mov|mp3|docx?|xlsx?|zip|css|js|json|woff2?|ttf|otf|eot)$#i', $relative_path ) ) {
-		return; // not a recognized upload type — let the normal 404 happen.
+		return; // not a recognized upload type -- let the normal 404 happen.
 	}
 
 	if ( 'do_not_cache' === sfp_get_mode() ) {
@@ -240,7 +240,7 @@ function sfp_fetch_and_save( $relative_path, $dest ) {
 	// Other bot protection (e.g. Anubis) does the opposite: it lets plain
 	// clients through but answers browser-like UAs with a 200 HTML challenge
 	// page. None of the proxied types are HTML, so an HTML response means
-	// we got such a page — retry once with a non-browser UA.
+	// we got such a page -- retry once with a non-browser UA.
 	if ( sfp_is_html_response( $resp ) ) {
 		$args['user-agent'] = 'stage-file-proxy (+https://github.com/affinitybridge/stage-file-proxy)';
 		$resp = wp_remote_get( $remote, $args );
@@ -250,7 +250,7 @@ function sfp_fetch_and_save( $relative_path, $dest ) {
 		return false; // origin doesn't have it.
 	}
 	if ( sfp_is_html_response( $resp ) ) {
-		return false; // still a block/challenge page — never cache it as the file.
+		return false; // still a block/challenge page -- never cache it as the file.
 	}
 
 	if ( ! wp_mkdir_p( dirname( $dest ) ) ) {
@@ -261,7 +261,7 @@ function sfp_fetch_and_save( $relative_path, $dest ) {
 }
 
 /**
- * Whether $resp is a successful response with an HTML body — for the file
+ * Whether $resp is a successful response with an HTML body -- for the file
  * types this plugin proxies, that's a bot-protection page, not the file.
  */
 function sfp_is_html_response( $resp ) {
@@ -403,7 +403,7 @@ function sfp_get_relative_path() {
 
 /**
  * Re-encode each segment of a decoded relative path (as returned by
- * sfp_get_relative_path()) so it can be used to build a URL again — the
+ * sfp_get_relative_path()) so it can be used to build a URL again -- the
  * source fetch URL, or the do_not_cache redirect target.
  */
 function sfp_encode_relative_path( $relative_path ) {

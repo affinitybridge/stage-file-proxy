@@ -4,21 +4,21 @@ Fetches missing uploads (images, PDFs, etc.) from a source site on demand,
 meaning you don't need to sync the entire `wp-content/uploads` directory to every development environment.
 
 **This plugin does nothing on production.** It should stay active everywhere
-— including prod — so that it doesn't need to be re-enabled every time a
+-- including prod -- so that it doesn't need to be re-enabled every time a
 development site's database is refreshed from a production export (plugin
 activation state comes along with the DB sync; the plugin itself never runs
 unless configured).
 
 The source site is configured through a constant in code (see
-Configuration below); the fetch mode is configured through **Tools →
+Configuration below); the fetch mode is configured through **Tools ->
 Stage File Proxy** in wp-admin (see Modes below).
 
 ## How it works
 
 When a request comes in for a file under `/wp-content/uploads/` that doesn't
 exist locally (a 404) and looks like a recognized upload type (image, PDF,
-video, etc. — see the extension list in the Modes section), the plugin steps
-in. What happens next depends on the configured mode — see Modes below —
+video, etc. -- see the extension list in the Modes section), the plugin steps
+in. What happens next depends on the configured mode -- see Modes below --
 but by default (fetch-and-cache):
 
 1. Requests the same relative path from the configured source site.
@@ -37,12 +37,12 @@ filenames sometimes contain characters WordPress would otherwise rewrite
 content, the request just keeps 404ing and re-fetching forever.
 
 Everything runs on the `init` hook and only engages for requests that look
-like an upload path — normal page loads are untouched.
+like an upload path -- normal page loads are untouched.
 
 ## Installation
 
 1. Copy (or symlink) this directory to `wp-content/plugins/stage-file-proxy`.
-2. Activate it — on every environment, including production.
+2. Activate it -- on every environment, including production.
 
 ## Configuration
 
@@ -66,10 +66,10 @@ if (file_exists(ABSPATH . "/wp-settings.php")) {
 ```
 
 If `STAGE_FILE_PROXY_URL` isn't defined (or is empty), the plugin exits
-immediately and does nothing — this is the expected state on production.
+immediately and does nothing -- this is the expected state on production.
 
 Notes on the value:
-- A trailing slash is optional — the plugin normalizes it either way.
+- A trailing slash is optional -- the plugin normalizes it either way.
 - Point it at the *uploads* directory (`.../wp-content/uploads/`), not the
   site root.
 
@@ -77,7 +77,7 @@ Notes on the value:
 
 The plugin has two mutually exclusive modes.
 
-Once the module is configured with the proxy URL, the mode can be set in wp-admin under **Tools → Stage File Proxy**, or with WP-CLI:
+Once the module is configured with the proxy URL, the mode can be set in wp-admin under **Tools -> Stage File Proxy**, or with WP-CLI:
 
 ```bash
 wp option update sfp_mode fetch_and_cache
@@ -85,19 +85,19 @@ wp option update sfp_mode fetch_and_cache
 wp option update sfp_mode do_not_cache
 ```
 
-- **Fetch and cache** (default) — *"Fetch and cache a local copy of missing
+- **Fetch and cache** (default) -- *"Fetch and cache a local copy of missing
   files from the proxy URL."* Fetches the file from the source site, saves
   it to disk under the exact requested filename, and serves it directly
   (same-origin, no redirect). Subsequent requests are served straight from
   disk without hitting the source site again. Also handles on-demand
   thumbnail resizing (see 'How it works' above).
-- **Do not cache** — *"Always fetch missing files from the proxy URL. Do not
+- **Do not cache** -- *"Always fetch missing files from the proxy URL. Do not
   cache them."* Redirects (302) the browser straight to the file's URL on
   the source site, every time, instead of fetching and caching it locally.
   Nothing is ever saved locally, so:
   - every request for that file redirects again (no caching, unlike fetch
     and cache, which saves on first fetch and serves locally from then on).
-  - WordPress itself still doesn't see the file as present — anything that
+  - WordPress itself still doesn't see the file as present -- anything that
     checks the filesystem directly (thumbnail regeneration, the image
     editor, media library file-exists checks) still treats it as missing,
     even though it loads fine in a browser.
@@ -108,20 +108,20 @@ wp option update sfp_mode do_not_cache
 
 Both modes apply to the same set of recognized extensions (`jpg`/`jpeg`/`png`/
 `gif`/`webp`/`avif`/`svg`/`ico`/`pdf`/`mp4`/`webm`/`mov`/`mp3`/`doc(x)`/
-`xls(x)`/`zip`/`css`/`js`/`json`/`woff(2)`/`ttf`/`otf`/`eot` — the text and
+`xls(x)`/`zip`/`css`/`js`/`json`/`woff(2)`/`ttf`/`otf`/`eot` -- the text and
 font types cover plugin-generated assets like Elementor's
 `uploads/elementor/css/post-*.css`); anything else just 404s regardless of
 mode.
 
 ## Updates
 
-This plugin isn't distributed through wp.org — it's internal, hosted at
+This plugin isn't distributed through wp.org -- it's internal, hosted at
 [affinitybridge/stage-file-proxy](https://github.com/affinitybridge/stage-file-proxy).
 Sites running it (installed via git, not a wp.org zip) check that GitHub
 repo for newer releases via the bundled
 [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker)
 library, and will show a normal wp-admin "update available" notice on the
-Plugins page and Dashboard → Updates when one is published. No separate
+Plugins page and Dashboard -> Updates when one is published. No separate
 update-checker plugin or per-site configuration is needed.
 
 ### Releasing updates
@@ -130,7 +130,7 @@ To ship an update that maintainers will see:
 
 1. Bump the `Version:` header in `stage-file-proxy.php`.
 2. Commit, tag the commit with that version (matching the header exactly,
-   e.g. `1.1` — no `v` prefix), and push the tag.
+   e.g. `1.1` -- no `v` prefix), and push the tag.
 3. Publish a [GitHub Release](https://github.com/affinitybridge/stage-file-proxy/releases)
    from that tag with release notes. The release notes become the
    changelog shown in the "View version x.x details" popup in wp-admin.
@@ -139,7 +139,7 @@ To ship an update that maintainers will see:
 
 Two standard WordPress filters let you hook into this plugin's behavior from
 your own theme or plugin code, without editing `stage-file-proxy.php`
-directly. Most setups won't need either — they exist as an escape hatch for
+directly. Most setups won't need either -- they exist as an escape hatch for
 source sites with unusual auth or path-layout quirks.
 
 ### `sfp_http_remote_args`
@@ -155,7 +155,7 @@ the source site. Default:
 ```
 
 The default `user-agent` overrides `wp_remote_get()`'s own default (something
-like `WordPress/7.x; https://yoursite.tld`) — bot protection on the source
+like `WordPress/7.x; https://yoursite.tld`) -- bot protection on the source
 site (fail2ban, a WAF, Cloudflare, etc.) can flag and block that on sight,
 which shows up as fetches silently failing / images never loading in
 `fetch_and_cache` mode.
@@ -182,11 +182,11 @@ add_filter( 'sfp_http_remote_args', function ( $args ) {
 ### `sfp_relative_path`
 
 Filters the relative upload path computed from the request URI (e.g.
-`2026/06/photo.jpg` — already stripped of `/wp-content/uploads/`, any
+`2026/06/photo.jpg` -- already stripped of `/wp-content/uploads/`, any
 multisite `/sites/123/` prefix, and URL-decoded) before it's used to build
 both the source fetch URL and the local save path.
 
-Use this if you need to remap paths between the two environments — e.g. the
+Use this if you need to remap paths between the two environments -- e.g. the
 source site organizes uploads differently, or certain paths should be
 redirected elsewhere:
 
