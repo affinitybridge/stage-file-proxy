@@ -158,7 +158,15 @@ The default `user-agent` overrides `wp_remote_get()`'s own default (something
 like `WordPress/7.x; https://yoursite.tld`) — bot protection on the source
 site (fail2ban, a WAF, Cloudflare, etc.) can flag and block that on sight,
 which shows up as fetches silently failing / images never loading in
-`fetch_and_cache` mode. If the source site blocks the browser UA above too,
+`fetch_and_cache` mode.
+
+Some protection (e.g. Anubis) does the opposite: it lets plain clients through
+but answers browser-like UAs with a 200 HTML "are you a bot?" page. None of
+the proxied file types are HTML, so when the source returns HTML the plugin
+retries once with the UA `stage-file-proxy (+https://github.com/affinitybridge/stage-file-proxy)`,
+and never saves an HTML response as the requested file.
+
+If the source site blocks the browser UA above too,
 or needs something else entirely (a specific UA it allow-lists, HTTP basic
 auth, a self-signed cert, a longer timeout for large files), override it
 here:

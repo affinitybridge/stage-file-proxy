@@ -234,9 +234,23 @@ function sfp_fetch_and_save( $relative_path, $dest ) {
 		'timeout'    => 30,
 		'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
 	);
-	$resp = wp_remote_get( $remote, apply_filters( 'sfp_http_remote_args', $default_args ) );
+	$args = apply_filters( 'sfp_http_remote_args', $default_args );
+	$resp = wp_remote_get( $remote, $args );
+
+	// Other bot protection (e.g. Anubis) does the opposite: it lets plain
+	// clients through but answers browser-like UAs with a 200 HTML challenge
+	// page. None of the proxied types are HTML, so an HTML response means
+	// we got such a page — retry once with a non-browser UA.
+	if ( sfp_is_html_response( $resp ) ) {
+		$args['user-agent'] = 'stage-file-proxy (+https://github.com/affinitybridge/stage-file-proxy)';
+		$resp = wp_remote_get( $remote, $args );
+	}
+
 	if ( is_wp_error( $resp ) || 200 !== (int) wp_remote_retrieve_response_code( $resp ) ) {
 		return false; // origin doesn't have it.
+	}
+	if ( sfp_is_html_response( $resp ) ) {
+		return false; // still a block/challenge page — never cache it as the file.
 	}
 
 	if ( ! wp_mkdir_p( dirname( $dest ) ) ) {
@@ -244,6 +258,21 @@ function sfp_fetch_and_save( $relative_path, $dest ) {
 	}
 	file_put_contents( $dest, wp_remote_retrieve_body( $resp ) ); // exact name, no sanitize.
 	return true;
+}
+
+/**
+ * Whether $resp is a successful response with an HTML body — for the file
+ * types this plugin proxies, that's a bot-protection page, not the file.
+ */
+function sfp_is_html_response( $resp ) {
+	if ( is_wp_error( $resp ) || 200 !== (int) wp_remote_retrieve_response_code( $resp ) ) {
+		return false;
+	}
+	$type = wp_remote_retrieve_header( $resp, 'content-type' );
+	if ( is_array( $type ) ) {
+		$type = reset( $type );
+	}
+	return 0 === stripos( (string) $type, 'text/html' );
 }
 
 /**
