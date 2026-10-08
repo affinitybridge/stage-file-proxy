@@ -53,8 +53,19 @@ filenames sometimes contain characters WordPress would otherwise rewrite
 "10.33.02 AM"). If the saved name doesn't match the URL referenced in the
 content, the request just keeps 404ing and re-fetching forever.
 
-Everything runs on the `init` hook and only engages for requests that look
-like an upload path -- normal page loads are untouched.
+Everything above runs on the `init` hook and only engages for requests that
+look like an upload path.
+
+Some code resizes images server-side from the local original instead of
+linking to a thumbnail URL (e.g. Toolset Views'
+`[wpv-post-featured-image size="custom"]`). With the original missing, that
+just renders no image, and no request ever reaches the proxy. So, in
+fetch-and-cache mode, when WordPress opens a missing uploads image in an
+image editor (`wp_get_image_editor()`), the plugin fetches the original from
+the source site first. If that fails, it doesn't try again for that file for
+an hour (5 minutes if the source was just rate-limiting or failing), so page
+renders aren't held up re-fetching it every time. When the file is already
+on disk, this does nothing.
 
 ## Installation
 

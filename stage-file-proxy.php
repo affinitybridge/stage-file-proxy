@@ -3,7 +3,7 @@
 	Plugin Name: Stage File Proxy
 	Description: Fetches missing uploads from a configured source site on non-production environments. This plugin does nothing on prod but should remain enabled so that it won't need to be re-enabled when development sites sync the database. To use this plugin in development environments, see the README.md. Other settings under Tools -> Stage File Proxy (once it is configured).
 	Note: If you don't have an /uploads/ directory on your development site, it may take a few requests for the plugin to fully populate it.
-	Version: 1.1.2
+	Version: 1.1.3
 	Author: Affinity Bridge
 	Author URI: mailto:info@affinitybridge.com
 	Update URI: https://github.com/affinitybridge/stage-file-proxy/
@@ -426,6 +426,68 @@ function sfp_serve_requested_file( $filename ) {
 	header( 'Content-Length: ' . filesize( $filename ) );
 	readfile( $filename );
 	exit;
+}
+
+/**
+ * Some code resizes images server-side from the local original instead of
+ * linking to a thumbnail URL -- e.g. Toolset Views' [wpv-post-featured-image
+ * size="custom"] calls wp_get_image_editor() on the original's path. When
+ * the original isn't on disk that just fails, and no URL for this plugin to
+ * catch ever reaches the browser. So fetch a missing original right before
+ * WordPress tries to load it into an image editor.
+ *
+ * WordPress doesn't filter the path it's about to load, but it does pass it
+ * to each editor implementation's test() while choosing one -- so put a
+ * stand-in "editor" first in line that fetches the file and then declines,
+ * leaving the real editors to load it.
+ */
+class SFP_Fetch_Missing_Original {
+	public static function test( $args = array() ) {
+		if ( ! empty( $args['path'] ) ) {
+			sfp_fetch_missing_original( $args['path'] );
+		}
+		return false;
+	}
+
+	public static function supports_mime_type( $mime_type ) {
+		return false;
+	}
+}
+
+function sfp_image_editors( $editors ) {
+	array_unshift( $editors, 'SFP_Fetch_Missing_Original' );
+	return $editors;
+}
+add_filter( 'wp_image_editors', 'sfp_image_editors' );
+
+/**
+ * Fetch $path from the source site if it's a missing image under uploads.
+ * Only in fetch_and_cache mode -- do_not_cache never saves anything locally.
+ */
+function sfp_fetch_missing_original( $path ) {
+	if ( 'fetch_and_cache' !== sfp_get_mode() || file_exists( $path ) ) {
+		return;
+	}
+	if ( false !== strpos( $path, '..' ) || ! preg_match( '#\.(jpe?g|png|gif|webp|avif)$#i', $path ) ) {
+		return;
+	}
+	$basedir = trailingslashit( wp_get_upload_dir()['basedir'] );
+	if ( 0 !== strpos( $path, $basedir ) ) {
+		return; // not in uploads -- nothing the source site would have.
+	}
+
+	// This runs during page renders, so remember a failed fetch for a while
+	// rather than hitting the source site (with retries) on every render:
+	// an hour if it doesn't have the file, a few minutes if it was just
+	// struggling (rate limit, overload, timeout).
+	$failed_key = 'sfp_missing_' . md5( $path );
+	if ( get_transient( $failed_key ) ) {
+		return;
+	}
+	$result = sfp_fetch_and_save( substr( $path, strlen( $basedir ) ), $path );
+	if ( true !== $result ) {
+		set_transient( $failed_key, 1, 'transient' === $result ? 5 * MINUTE_IN_SECONDS : HOUR_IN_SECONDS );
+	}
 }
 
 /**
